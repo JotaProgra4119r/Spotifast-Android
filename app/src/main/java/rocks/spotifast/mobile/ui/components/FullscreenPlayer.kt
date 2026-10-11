@@ -8,6 +8,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -136,8 +139,26 @@ fun FullscreenPlayer(
         }
     }
 
+    val lyricsLines = trackLyrics?.lines ?: emptyList()
+    val activeIndex = remember(progressMs, lyricsLines) {
+        if (lyricsLines.isEmpty() || trackLyrics?.isSynced != true) -1
+        else {
+            val idx = lyricsLines.indexOfLast { it.timeMs <= progressMs }
+            if (idx >= 0) idx else 0
+        }
+    }
+
     val activeLyricLine = remember(trackLyrics, progressMs) {
-        trackLyrics?.lines?.lastOrNull { it.timeMs <= progressMs }?.text ?: ""
+        lyricsLines.lastOrNull { it.timeMs <= progressMs }?.text ?: ""
+    }
+
+    val lyricsListState = rememberLazyListState()
+
+    // Auto-scroll suave de las letras conforme corre la música
+    LaunchedEffect(activeIndex) {
+        if (activeIndex >= 0 && lyricsLines.size > activeIndex) {
+            lyricsListState.animateScrollToItem((activeIndex - 1).coerceAtLeast(0))
+        }
     }
 
     if (showEqualizer) {
@@ -189,7 +210,7 @@ fun FullscreenPlayer(
                 .padding(horizontal = 24.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.Top
         ) {
             // Cabecera superior
             Row(
@@ -507,38 +528,92 @@ fun FullscreenPlayer(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Tarjeta inferior de vista previa de "Letras" (Exacto Screenshot 2)
+            // Tarjeta interactiva de "Letras" sincronizadas con scroll (Exacto a Spotify)
             Surface(
-                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                color = animatedBgColor.copy(alpha = 0.55f),
+                shape = RoundedCornerShape(16.dp),
+                color = animatedBgColor.copy(alpha = 0.65f),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { showLyrics = true }
-                    .padding(bottom = 6.dp)
+                    .height(340.dp)
+                    .padding(bottom = 16.dp)
             ) {
-                Row(
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxSize()
+                        .padding(16.dp)
                 ) {
-                    Text(
-                        text = "Letras",
-                        color = SpotifyWhite,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
-                    Icon(
-                        imageVector = Icons.Default.OpenInFull,
-                        contentDescription = "Expandir letras",
-                        tint = SpotifyWhite,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Letras",
+                            color = SpotifyWhite,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        IconButton(
+                            onClick = { showLyrics = true },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.OpenInFull,
+                                contentDescription = "Expandir letras completas",
+                                tint = SpotifyWhite,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    if (trackLyrics == null) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = SpotifyGreen, modifier = Modifier.size(28.dp))
+                        }
+                    } else if (lyricsLines.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = if (trackLyrics?.isInstrumental == true)
+                                    "Esta canción es instrumental (\u266a)"
+                                else
+                                    "No hay letras disponibles para esta canción",
+                                color = SpotifySubtext,
+                                fontSize = 14.sp
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            state = lyricsListState,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            itemsIndexed(lyricsLines) { index, line ->
+                                val isActive = index == activeIndex
+                                Text(
+                                    text = line.text,
+                                    color = if (isActive) SpotifyWhite else SpotifyWhite.copy(alpha = 0.45f),
+                                    fontSize = if (isActive) 20.sp else 16.sp,
+                                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                                    lineHeight = if (isActive) 28.sp else 22.sp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (trackLyrics?.isSynced == true) {
+                                                onSeek(line.timeMs)
+                                            }
+                                        }
+                                        .padding(vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
+
+            Spacer(modifier = Modifier.height(40.dp))
         }
     }
 }

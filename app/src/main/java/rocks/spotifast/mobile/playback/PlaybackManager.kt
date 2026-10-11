@@ -457,12 +457,15 @@ class PlaybackManager(private val context: Context) {
     }
 
     fun toggleShuffle() {
-        val next = !_isShuffle.value
-        _isShuffle.value = next
+        setShuffle(!_isShuffle.value)
+    }
+
+    fun setShuffle(enabled: Boolean) {
+        _isShuffle.value = enabled
         if (!isPlayingOnLocalPhone) {
             scope.launch(Dispatchers.IO) {
                 try {
-                    SpotifyClient.apiService.setShuffle(state = next, deviceId = _connectedDevice.value?.id)
+                    SpotifyClient.apiService.setShuffle(state = enabled, deviceId = _connectedDevice.value?.id)
                 } catch (_: Exception) {}
             }
         }

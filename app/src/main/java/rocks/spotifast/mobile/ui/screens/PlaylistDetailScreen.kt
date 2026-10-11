@@ -10,6 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
+import rocks.spotifast.mobile.SpotifastApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -165,11 +167,36 @@ fun PlaylistDetailScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Botón de reproducción grande verde (reproduce nativamente dentro de la app con ExoPlayer)
+            // Botón de reproducción y botón aleatorio
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Surface(
+                    onClick = {
+                        if (tracks.isNotEmpty()) {
+                            SpotifastApp.instance.playbackManager.setShuffle(true)
+                            val shuffled = tracks.shuffled()
+                            onPlayAllClick(playlist, shuffled)
+                        }
+                    },
+                    shape = CircleShape,
+                    color = LocalSpotifastColors.current.card,
+                    modifier = Modifier.size(46.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Shuffle,
+                            contentDescription = "Reproducción aleatoria",
+                            tint = LocalSpotifastColors.current.accent,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
                 Surface(
                     onClick = { onPlayAllClick(playlist, tracks) },
                     shape = CircleShape,

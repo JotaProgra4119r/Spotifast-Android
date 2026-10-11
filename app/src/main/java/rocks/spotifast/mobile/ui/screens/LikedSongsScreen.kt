@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import rocks.spotifast.mobile.SpotifastApp
 import rocks.spotifast.mobile.data.api.SpotifyClient
 import rocks.spotifast.mobile.data.api.models.Track
 import rocks.spotifast.mobile.data.api.models.UserProfile
@@ -230,12 +231,13 @@ fun LikedSongsScreen(
                     Surface(
                         onClick = {
                             if (tracks.isNotEmpty()) {
+                                SpotifastApp.instance.playbackManager.setShuffle(true)
                                 onPlayAllClick(tracks.shuffled())
                             }
                         },
                         shape = CircleShape,
                         color = LocalSpotifastColors.current.card,
-                        modifier = Modifier.size(42.dp)
+                        modifier = Modifier.size(46.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(

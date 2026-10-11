@@ -35,6 +35,10 @@ class SettingsManager(context: Context) {
     private val _streamingBitrate = MutableStateFlow(prefs.getInt("streaming_bitrate", 320))
     val streamingBitrate: StateFlow<Int> = _streamingBitrate.asStateFlow()
 
+    // Calidad de descarga
+    private val _downloadBitrate = MutableStateFlow(prefs.getInt("download_bitrate", 320))
+    val downloadBitrate: StateFlow<Int> = _downloadBitrate.asStateFlow()
+
     // Reproducción
     private val _gaplessPlayback = MutableStateFlow(prefs.getBoolean("gapless_playback", true))
     val gaplessPlayback: StateFlow<Boolean> = _gaplessPlayback.asStateFlow()
@@ -96,6 +100,11 @@ class SettingsManager(context: Context) {
     fun setStreamingBitrate(kbps: Int) {
         _streamingBitrate.value = kbps
         prefs.edit().putInt("streaming_bitrate", kbps).apply()
+    }
+
+    fun setDownloadBitrate(kbps: Int) {
+        _downloadBitrate.value = kbps
+        prefs.edit().putInt("download_bitrate", kbps).apply()
     }
 
     fun setGaplessPlayback(enabled: Boolean) {

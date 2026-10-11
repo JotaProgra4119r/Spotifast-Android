@@ -45,6 +45,7 @@ fun SettingsScreen(
     val settingsManager = SpotifastApp.instance.settingsManager
 
     val streamingBitrate by settingsManager.streamingBitrate.collectAsState()
+    val downloadBitrate by settingsManager.downloadBitrate.collectAsState()
     val gapless by settingsManager.gaplessPlayback.collectAsState()
     val normalizeVolume by settingsManager.normalizeVolume.collectAsState()
     val crossfade by settingsManager.crossfadeSeconds.collectAsState()
@@ -291,6 +292,42 @@ fun SettingsScreen(
                             FilterChip(
                                 selected = streamingBitrate == bitrate,
                                 onClick = { settingsManager.setStreamingBitrate(bitrate) },
+                                label = { Text("${bitrate}k", fontSize = 12.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = SpotifyGreen,
+                                    selectedLabelColor = SpotifyBlack,
+                                    containerColor = SpotifyBlack,
+                                    labelColor = SpotifyWhite
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Divider(color = SpotifyCardGray, thickness = 0.5.dp)
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Download, contentDescription = null, tint = SpotifyGreen, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Calidad de descarga (Archivos offline)", color = SpotifyWhite, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "96 kbps (Baja - ahorra espacio) • 160 kbps (Alta) • 320 kbps (Muy alta - calidad CD)",
+                        color = SpotifySubtext,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(96, 160, 320).forEach { bitrate ->
+                            FilterChip(
+                                selected = downloadBitrate == bitrate,
+                                onClick = { settingsManager.setDownloadBitrate(bitrate) },
                                 label = { Text("${bitrate}k", fontSize = 12.sp) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = SpotifyGreen,
