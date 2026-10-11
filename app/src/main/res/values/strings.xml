@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Spotifast</string>
+    <string name="nav_home">Inicio</string>
+    <string name="nav_search">Buscar</string>
+    <string name="nav_library">Tu biblioteca</string>
+    <string name="liked_songs">Tus me gusta</string>
+    <string name="search_hint">¿Qué quieres escuchar?</string>
+    <string name="audio_quality">Calidad de audio</string>
+    <string name="very_high">Muy alta (320 kbps)</string>
+</resources>
