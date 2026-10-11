@@ -169,11 +169,12 @@ fun FullscreenPlayer(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(SpotifyBlack)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
                         animatedBgColor,
-                        animatedBgColor.copy(alpha = 0.65f),
+                        animatedBgColor.copy(alpha = 0.7f),
                         SpotifyBlack,
                         SpotifyBlack
                     )
@@ -194,7 +195,7 @@ fun FullscreenPlayer(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp, bottom = 8.dp),
+                    .padding(top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
