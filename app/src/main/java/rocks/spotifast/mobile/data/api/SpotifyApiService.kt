@@ -133,6 +133,38 @@ interface SpotifyApiService {
     suspend fun checkSavedTracks(
         @Query("ids") ids: String
     ): Response<List<Boolean>>
+
+    @GET("v1/me/top/artists")
+    suspend fun getTopArtists(
+        @Query("time_range") timeRange: String = "medium_term",
+        @Query("limit") limit: Int = 20
+    ): Response<Paging<Artist>>
+
+    @GET("v1/me/top/tracks")
+    suspend fun getTopTracks(
+        @Query("time_range") timeRange: String = "medium_term",
+        @Query("limit") limit: Int = 20
+    ): Response<Paging<Track>>
+
+    @GET("v1/recommendations")
+    suspend fun getRecommendations(
+        @Query("seed_artists") seedArtists: String? = null,
+        @Query("seed_tracks") seedTracks: String? = null,
+        @Query("seed_genres") seedGenres: String? = null,
+        @Query("limit") limit: Int = 20
+    ): Response<RecommendationsResponse>
+
+    @GET("v1/me/albums")
+    suspend fun getSavedAlbums(
+        @Query("limit") limit: Int = 50,
+        @Query("offset") offset: Int = 0
+    ): Response<Paging<SavedAlbum>>
+
+    @GET("v1/me/following")
+    suspend fun getFollowedArtists(
+        @Query("type") type: String = "artist",
+        @Query("limit") limit: Int = 50
+    ): Response<FollowedArtistsResponse>
 }
 
 interface SpotifyAuthService {

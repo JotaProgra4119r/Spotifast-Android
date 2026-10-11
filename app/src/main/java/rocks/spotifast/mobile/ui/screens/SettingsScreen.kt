@@ -71,6 +71,8 @@ fun SettingsScreen(
     var showDevicesSheet by remember { mutableStateOf(false) }
     var showEqualizerSheet by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showProfileDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
 
     if (showDevicesSheet) {
         DevicesSheet(onDismiss = { showDevicesSheet = false })
@@ -78,6 +80,70 @@ fun SettingsScreen(
 
     if (showEqualizerSheet) {
         EqualizerSheet(onDismiss = { showEqualizerSheet = false })
+    }
+
+    if (showProfileDialog) {
+        AlertDialog(
+            onDismissRequest = { showProfileDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Person, contentDescription = null, tint = LocalSpotifastColors.current.accent)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Perfil de Spotify", fontWeight = FontWeight.Bold, color = LocalSpotifastColors.current.textPrimary)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Usuario: ${userProfile?.displayName ?: "No disponible"}", fontWeight = FontWeight.SemiBold, color = LocalSpotifastColors.current.textPrimary)
+                    Text("Correo: ${userProfile?.email ?: "No disponible"}", color = LocalSpotifastColors.current.textSecondary)
+                    Text("Plan: ${if (userProfile?.product == "premium") "Spotify Premium" else "Spotify Free"}", color = LocalSpotifastColors.current.textSecondary)
+                    Text("País: ${userProfile?.country ?: "No especificado"}", color = LocalSpotifastColors.current.textSecondary)
+                    Text("Seguidores: ${userProfile?.followers?.total ?: 0}", color = LocalSpotifastColors.current.textSecondary)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showProfileDialog = false }) {
+                    Text("Cerrar", color = LocalSpotifastColors.current.accent)
+                }
+            },
+            containerColor = LocalSpotifastColors.current.card,
+            titleContentColor = LocalSpotifastColors.current.textPrimary,
+            textContentColor = LocalSpotifastColors.current.textSecondary
+        )
+    }
+
+    if (showAboutDialog) {
+        AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Info, contentDescription = null, tint = LocalSpotifastColors.current.accent)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Acerca de Spotifast Mobile", fontWeight = FontWeight.Bold, color = LocalSpotifastColors.current.textPrimary)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Versión: v0.36.0 (Android 15 / Oppo A58)", fontWeight = FontWeight.SemiBold, color = LocalSpotifastColors.current.textPrimary)
+                    Text("Autor del port: JotaProgra4119r", color = LocalSpotifastColors.current.textSecondary)
+                    Text("Inspirado en: Spotifast Desktop (crmne/spotifast)", color = LocalSpotifastColors.current.textSecondary)
+                    Text("Motor de audio: ExoPlayer nativo + Spotify Connect", color = LocalSpotifastColors.current.textSecondary)
+                    Text("Letras sincronizadas: LRCLIB", color = LocalSpotifastColors.current.textSecondary)
+                    Text("Visualizadores: Winamp Spectrum & Oscilloscope", color = LocalSpotifastColors.current.textSecondary)
+                    Text("Sin anuncios • Sin telemetría • Privacidad total", color = LocalSpotifastColors.current.accent)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("github.com/JotaProgra4119r/Spotifast-Android", color = LocalSpotifastColors.current.accent, fontSize = 12.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAboutDialog = false }) {
+                    Text("Entendido", color = LocalSpotifastColors.current.accent)
+                }
+            },
+            containerColor = LocalSpotifastColors.current.card,
+            titleContentColor = LocalSpotifastColors.current.textPrimary,
+            textContentColor = LocalSpotifastColors.current.textSecondary
+        )
     }
 
     if (showLogoutDialog) {
@@ -97,12 +163,12 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showLogoutDialog = false }) {
-                    Text("Cancelar", color = SpotifyWhite)
+                    Text("Cancelar", color = LocalSpotifastColors.current.textPrimary)
                 }
             },
-            containerColor = SpotifyDarkGray,
-            titleContentColor = SpotifyWhite,
-            textContentColor = SpotifySubtext
+            containerColor = LocalSpotifastColors.current.card,
+            titleContentColor = LocalSpotifastColors.current.textPrimary,
+            textContentColor = LocalSpotifastColors.current.textSecondary
         )
     }
 
@@ -147,7 +213,8 @@ fun SettingsScreen(
                 SettingsCategory(
                     icon = Icons.Default.Person,
                     title = "Perfil de Spotify",
-                    subtitle = "$name • $plan • $country" + (if (email.isNotEmpty()) "\n$email" else "")
+                    subtitle = "$name • $plan • $country" + (if (email.isNotEmpty()) "\n$email" else "") + "\nToca para ver detalles",
+                    onClick = { showProfileDialog = true }
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -594,7 +661,8 @@ fun SettingsScreen(
                 SettingsCategory(
                     icon = Icons.Default.Info,
                     title = "Spotifast Mobile v0.36.0",
-                    subtitle = "Port nativo de Spotifast para Android 15 (Oppo A58 / ColorOS 15)\nBasado en crmne/spotifast • Sin telemetría"
+                    subtitle = "Port nativo de Spotifast para Android 15 (Oppo A58 / ColorOS 15)\nBasado en crmne/spotifast • Toca para ver créditos y detalles",
+                    onClick = { showAboutDialog = true }
                 )
             }
             Spacer(modifier = Modifier.height(24.dp))
@@ -609,9 +677,9 @@ fun SettingsScreen(
                         .fillMaxWidth(0.7f)
                         .height(46.dp)
                 ) {
-                    Icon(Icons.Default.Logout, contentDescription = null, tint = SpotifyWhite)
+                    Icon(Icons.Default.Logout, contentDescription = null, tint = LocalSpotifastColors.current.textPrimary)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Cerrar sesión", color = SpotifyWhite, fontWeight = FontWeight.Bold)
+                    Text("Cerrar sesión", color = LocalSpotifastColors.current.textPrimary, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -624,7 +692,7 @@ fun SettingsScreen(
 fun SectionTitle(text: String) {
     Text(
         text = text,
-        color = SpotifyWhite,
+        color = LocalSpotifastColors.current.textPrimary,
         fontSize = 16.sp,
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
@@ -635,7 +703,7 @@ fun SectionTitle(text: String) {
 fun SettingsCard(content: @Composable () -> Unit) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = SpotifyDarkGray,
+        color = LocalSpotifastColors.current.card,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
@@ -658,11 +726,11 @@ fun SettingsCategory(
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = SpotifyGreen, modifier = Modifier.size(24.dp))
+        Icon(imageVector = icon, contentDescription = null, tint = LocalSpotifastColors.current.accent, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, color = SpotifyWhite, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Text(text = subtitle, color = SpotifySubtext, fontSize = 12.sp, lineHeight = 16.sp)
+            Text(text = title, color = LocalSpotifastColors.current.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(text = subtitle, color = LocalSpotifastColors.current.textSecondary, fontSize = 12.sp, lineHeight = 16.sp)
         }
     }
 }
@@ -682,20 +750,21 @@ fun SettingsToggleRow(
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = SpotifyGreen, modifier = Modifier.size(22.dp))
+        Icon(imageVector = icon, contentDescription = null, tint = LocalSpotifastColors.current.accent, modifier = Modifier.size(22.dp))
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, color = SpotifyWhite, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Text(text = subtitle, color = SpotifySubtext, fontSize = 11.sp, lineHeight = 15.sp)
+            Text(text = title, color = LocalSpotifastColors.current.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(text = subtitle, color = LocalSpotifastColors.current.textSecondary, fontSize = 11.sp, lineHeight = 15.sp)
         }
         Spacer(modifier = Modifier.width(8.dp))
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = SpotifyBlack,
-                checkedTrackColor = SpotifyGreen
+                checkedThumbColor = LocalSpotifastColors.current.background,
+                checkedTrackColor = LocalSpotifastColors.current.accent
             )
         )
     }
 }
+

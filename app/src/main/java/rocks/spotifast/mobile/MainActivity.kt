@@ -366,6 +366,10 @@ fun MainAppScaffold(
                         NavigationScreen.LIBRARY -> {
                             LibraryScreen(
                                 onBackClick = { onScreenChange(NavigationScreen.HOME) },
+                                onPlaylistClick = { playlist ->
+                                    onPlaylistChange(playlist)
+                                    onScreenChange(NavigationScreen.PLAYLIST_DETAIL)
+                                },
                                 onTrackClick = { track, list -> playbackManager.playTrack(track, list) }
                             )
                         }
@@ -375,8 +379,8 @@ fun MainAppScaffold(
                                     playlist = pl,
                                     onBackClick = { onScreenChange(NavigationScreen.HOME) },
                                     onTrackClick = { track, list -> playbackManager.playTrack(track, list) },
-                                    onPlayAllClick = { plItem ->
-                                        playbackManager.playPlaylistContext(plItem.uri)
+                                    onPlayAllClick = { plItem, tracks ->
+                                        playbackManager.playPlaylistContext(plItem.uri, tracksFallback = tracks)
                                     }
                                 )
                             } ?: run {

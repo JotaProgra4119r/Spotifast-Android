@@ -88,4 +88,13 @@ class PortParityTest {
         assertTrue(themes.contains(ThemePreset.WINAMP_CLASSIC))
         assertTrue(themes.contains(ThemePreset.CYBERPUNK_NEON))
     }
+
+    @Test
+    fun testStandaloneLocalPlayerDevice() {
+        val localDevice = rocks.spotifast.mobile.playback.PlaybackManager.LOCAL_PHONE_DEVICE
+        assertEquals("spotifast_local_player", localDevice.id)
+        assertTrue(localDevice.isActive)
+        assertTrue(localDevice.name.contains("Este teléfono"))
+    }
 }
+

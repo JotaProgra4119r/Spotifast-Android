@@ -163,3 +163,16 @@ data class TokenResponse(
     @SerializedName("refresh_token") val refreshToken: String?,
     val scope: String?
 )
+
+data class RecommendationsResponse(
+    val tracks: List<Track>?
+)
+
+data class SavedAlbum(
+    @SerializedName("added_at") val addedAt: String?,
+    val album: Album
+)
+
+data class FollowedArtistsResponse(
+    val artists: Paging<Artist>?
+)

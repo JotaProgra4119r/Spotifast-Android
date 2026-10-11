@@ -16,7 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import rocks.spotifast.mobile.SpotifastApp
-import rocks.spotifast.mobile.data.api.models.Device
+import rocks.spotifast.mobile.playback.PlaybackManager
 import rocks.spotifast.mobile.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,7 +34,7 @@ fun DevicesSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = SpotifyDarkGray,
+        containerColor = LocalSpotifastColors.current.card,
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
     ) {
         Column(
@@ -51,98 +51,73 @@ fun DevicesSheet(
                     Icon(
                         imageVector = Icons.Default.Devices,
                         contentDescription = null,
-                        tint = SpotifyGreen,
+                        tint = LocalSpotifastColors.current.accent,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = "Dispositivos Spotify Connect",
-                        color = SpotifyWhite,
+                        color = LocalSpotifastColors.current.textPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
                 IconButton(onClick = { playbackManager.refreshDevices() }) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Actualizar", tint = SpotifySubtext)
+                    Icon(Icons.Default.Refresh, contentDescription = "Actualizar", tint = LocalSpotifastColors.current.textSecondary)
                 }
             }
 
             Text(
-                text = "Transfiere la reproducción a cualquier dispositivo disponible en tu cuenta o red local.",
-                color = SpotifySubtext,
+                text = "Selecciona dónde reproducir la música: en este teléfono o en tus dispositivos externos.",
+                color = LocalSpotifastColors.current.textSecondary,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
             )
 
-            if (availableDevices.isEmpty()) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = SpotifyCardGray,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+            LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                items(availableDevices) { device ->
+                    val isCurrent = device.id == connectedDevice?.id || (connectedDevice?.id == PlaybackManager.LOCAL_DEVICE_ID && device.id == PlaybackManager.LOCAL_DEVICE_ID)
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                playbackManager.transferToDevice(device)
+                                onDismiss()
+                            }
+                            .padding(vertical = 12.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "No se encontraron otros dispositivos activos.",
-                            color = SpotifySubtext,
-                            fontSize = 13.sp
+                        Icon(
+                            imageVector = getDeviceIcon(device.type),
+                            contentDescription = null,
+                            tint = if (isCurrent) LocalSpotifastColors.current.accent else LocalSpotifastColors.current.textPrimary,
+                            modifier = Modifier.size(28.dp)
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Abre Spotify en tu PC, altavoz o TV para que aparezcan aquí.",
-                            color = SpotifySubtext,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                    items(availableDevices) { device ->
-                        val isCurrent = device.id == connectedDevice?.id || device.isActive
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    playbackManager.transferToDevice(device)
-                                    onDismiss()
-                                }
-                                .padding(vertical = 12.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = getDeviceIcon(device.type),
-                                contentDescription = null,
-                                tint = if (isCurrent) SpotifyGreen else SpotifyWhite,
-                                modifier = Modifier.size(28.dp)
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = device.name,
+                                color = if (isCurrent) LocalSpotifastColors.current.accent else LocalSpotifastColors.current.textPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
                             )
+                            Text(
+                                text = if (isCurrent) "✓ Escuchando ahora" else if (device.id == PlaybackManager.LOCAL_DEVICE_ID) "Reproductor nativo de Spotifast" else "Spotify Connect • ${device.type}",
+                                color = if (isCurrent) LocalSpotifastColors.current.accent else LocalSpotifastColors.current.textSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
 
-                            Spacer(modifier = Modifier.width(16.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = device.name,
-                                    color = if (isCurrent) SpotifyGreen else SpotifyWhite,
-                                    fontSize = 15.sp,
-                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
-                                )
-                                Text(
-                                    text = if (isCurrent) "✓ Escuchando ahora" else "Spotify Connect • ${device.type}",
-                                    color = if (isCurrent) SpotifyGreen else SpotifySubtext,
-                                    fontSize = 12.sp
-                                )
-                            }
-
-                            if (device.volumePercent != null) {
-                                Text(
-                                    text = "${device.volumePercent}%",
-                                    color = SpotifySubtext,
-                                    fontSize = 12.sp
-                                )
-                            }
+                        if (device.volumePercent != null) {
+                            Text(
+                                text = "${device.volumePercent}%",
+                                color = LocalSpotifastColors.current.textSecondary,
+                                fontSize = 12.sp
+                            )
                         }
                     }
                 }

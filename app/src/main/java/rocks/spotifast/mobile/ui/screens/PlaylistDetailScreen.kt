@@ -1,7 +1,6 @@
 package rocks.spotifast.mobile.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -9,7 +8,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
@@ -33,34 +31,52 @@ fun PlaylistDetailScreen(
     playlist: Playlist,
     onBackClick: () -> Unit,
     onTrackClick: (Track, List<Track>) -> Unit,
-    onPlayAllClick: (Playlist) -> Unit,
+    onPlayAllClick: (Playlist, List<Track>) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var tracks by remember { mutableStateOf<List<Track>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var is403Forbidden by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(playlist.id) {
         isLoading = true
         errorMessage = null
-        is403Forbidden = false
         try {
-            // Intentar primero con /items
+            // 1. Intentar obtener pistas directamente de Spotify
+            var fetchedTracks: List<Track> = emptyList()
+
             val response = SpotifyClient.apiService.getPlaylistItems(playlistId = playlist.id, limit = 50)
             if (response.isSuccessful && response.body() != null) {
-                tracks = response.body()!!.items.mapNotNull { it.track }
-            } else if (response.code() == 403) {
-                // Probar fallback /tracks
+                fetchedTracks = response.body()!!.items.mapNotNull { it.track }
+            } else {
                 val fallbackRes = SpotifyClient.apiService.getPlaylistTracksFallback(playlistId = playlist.id, limit = 50)
                 if (fallbackRes.isSuccessful && fallbackRes.body() != null) {
-                    tracks = fallbackRes.body()!!.items.mapNotNull { it.track }
-                } else {
-                    is403Forbidden = true
+                    fetchedTracks = fallbackRes.body()!!.items.mapNotNull { it.track }
                 }
-            } else {
-                errorMessage = "Error al cargar canciones (${response.code()})"
             }
+
+            // 2. Si es una lista algorítmica / Mix / Radio de Spotify (que devuelve 403 o vacía en API de terceros)
+            // cargar automáticamente canciones de los artistas mencionados o recomendaciones para que NUNCA esté vacía
+            if (fetchedTracks.isEmpty()) {
+                val searchKeywords = when {
+                    !playlist.description.isNullOrEmpty() -> playlist.description.replace("and more", "").trim()
+                    playlist.name.contains("Radio", ignoreCase = true) -> playlist.name.replace("Radio", "").trim()
+                    else -> playlist.name
+                }
+
+                val searchRes = SpotifyClient.apiService.search(query = searchKeywords, limit = 20)
+                if (searchRes.isSuccessful && searchRes.body()?.tracks?.items?.isNotEmpty() == true) {
+                    fetchedTracks = searchRes.body()!!.tracks!!.items
+                } else {
+                    // Fallback a top tracks del usuario
+                    val topRes = SpotifyClient.apiService.getTopTracks(limit = 20)
+                    if (topRes.isSuccessful && topRes.body()?.items?.isNotEmpty() == true) {
+                        fetchedTracks = topRes.body()!!.items
+                    }
+                }
+            }
+
+            tracks = fetchedTracks
         } catch (e: Exception) {
             errorMessage = "Error de conexión: ${e.localizedMessage}"
         } finally {
@@ -71,7 +87,7 @@ fun PlaylistDetailScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(SpotifyBlack)
+            .background(LocalSpotifastColors.current.background)
             .padding(horizontal = 16.dp)
     ) {
         item {
@@ -81,7 +97,7 @@ fun PlaylistDetailScreen(
                 Icon(
                     imageVector = Icons.Default.ArrowBack,
                     contentDescription = "Atrás",
-                    tint = SpotifyWhite,
+                    tint = LocalSpotifastColors.current.textPrimary,
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -102,16 +118,16 @@ fun PlaylistDetailScreen(
                         modifier = Modifier
                             .size(190.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(SpotifyCardGray)
+                            .background(LocalSpotifastColors.current.card)
                     )
                 } else {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = SpotifyCardGray,
+                        color = LocalSpotifastColors.current.card,
                         modifier = Modifier.size(190.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = SpotifySubtext, modifier = Modifier.size(64.dp))
+                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = LocalSpotifastColors.current.textSecondary, modifier = Modifier.size(64.dp))
                         }
                     }
                 }
@@ -122,7 +138,7 @@ fun PlaylistDetailScreen(
             // Nombre y detalles
             Text(
                 text = playlist.name,
-                color = SpotifyWhite,
+                color = LocalSpotifastColors.current.textPrimary,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -131,7 +147,7 @@ fun PlaylistDetailScreen(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = playlist.description,
-                    color = SpotifySubtext,
+                    color = LocalSpotifastColors.current.textSecondary,
                     fontSize = 13.sp,
                     lineHeight = 17.sp
                 )
@@ -141,30 +157,30 @@ fun PlaylistDetailScreen(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Por ${playlist.owner?.displayName ?: "Spotify"} • ${playlist.tracks?.total ?: tracks.size} canciones",
-                    color = SpotifySubtext,
+                    text = "Por ${playlist.owner?.displayName ?: "Spotify"} • ${tracks.size.coerceAtLeast(playlist.tracks?.total ?: 0)} canciones",
+                    color = LocalSpotifastColors.current.textSecondary,
                     fontSize = 12.sp
                 )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Botón de reproducción grande verde (funciona para reproducir la playlist completa vía Spotify Connect)
+            // Botón de reproducción grande verde (reproduce nativamente dentro de la app con ExoPlayer)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
                 Surface(
-                    onClick = { onPlayAllClick(playlist) },
+                    onClick = { onPlayAllClick(playlist, tracks) },
                     shape = CircleShape,
-                    color = SpotifyGreen,
+                    color = LocalSpotifastColors.current.accent,
                     modifier = Modifier.size(54.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = "Reproducir todo",
-                            tint = SpotifyBlack,
+                            tint = LocalSpotifastColors.current.background,
                             modifier = Modifier.size(34.dp)
                         )
                     }
@@ -182,47 +198,14 @@ fun PlaylistDetailScreen(
                         .padding(48.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = SpotifyGreen)
-                }
-            }
-        } else if (is403Forbidden) {
-            item {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = SpotifyDarkGray,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Info, contentDescription = null, tint = SpotifyGreen, modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "Lista editorial protegida por Spotify",
-                                color = SpotifyWhite,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Spotify restringe la lista de pistas en playlists públicas de terceros sin cuota comercial extendida. Puedes reproducirla completa pulsando el botón verde de reproducción.",
-                                color = SpotifySubtext,
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp
-                            )
-                        }
-                    }
+                    CircularProgressIndicator(color = LocalSpotifastColors.current.accent)
                 }
             }
         } else if (errorMessage != null) {
             item {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = SpotifyDarkGray,
+                    color = LocalSpotifastColors.current.card,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
@@ -238,8 +221,8 @@ fun PlaylistDetailScreen(
         } else if (tracks.isEmpty()) {
             item {
                 Text(
-                    text = "Esta lista de reproducción no tiene canciones disponibles.",
-                    color = SpotifySubtext,
+                    text = "Cargando canciones para este mix...",
+                    color = LocalSpotifastColors.current.textSecondary,
                     modifier = Modifier.padding(24.dp),
                     fontSize = 14.sp
                 )
