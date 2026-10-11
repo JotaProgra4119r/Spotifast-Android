@@ -191,7 +191,8 @@ enum class NavigationScreen {
     SEARCH,
     LIBRARY,
     SETTINGS,
-    PLAYLIST_DETAIL
+    PLAYLIST_DETAIL,
+    LIKED_SONGS
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -348,7 +349,7 @@ fun MainAppScaffold(
                             HomeScreen(
                                 userProfile = userProfile,
                                 onProfileClick = { scope.launch { drawerState.open() } },
-                                onLikedSongsClick = { onScreenChange(NavigationScreen.LIBRARY) },
+                                onLikedSongsClick = { onScreenChange(NavigationScreen.LIKED_SONGS) },
                                 onPlaylistClick = { playlist ->
                                     onPlaylistChange(playlist)
                                     onScreenChange(NavigationScreen.PLAYLIST_DETAIL)
@@ -386,6 +387,16 @@ fun MainAppScaffold(
                             } ?: run {
                                 onScreenChange(NavigationScreen.HOME)
                             }
+                        }
+                        NavigationScreen.LIKED_SONGS -> {
+                            LikedSongsScreen(
+                                userProfile = userProfile,
+                                onBackClick = { onScreenChange(NavigationScreen.HOME) },
+                                onTrackClick = { track, list -> playbackManager.playTrack(track, list) },
+                                onPlayAllClick = { list ->
+                                    if (list.isNotEmpty()) playbackManager.playTrack(list.first(), list)
+                                }
+                            )
                         }
                         NavigationScreen.SETTINGS -> {
                             SettingsScreen(

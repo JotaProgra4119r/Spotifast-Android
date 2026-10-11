@@ -66,15 +66,51 @@ fun LibraryScreen(
             try {
                 when (selectedTab) {
                     LibraryTab.PLAYLISTS -> {
-                        val res = SpotifyClient.apiService.getUserPlaylists(limit = 50)
-                        if (res.isSuccessful && res.body() != null) {
-                            playlists = res.body()!!.items
+                        val firstRes = SpotifyClient.apiService.getUserPlaylists(limit = 50, offset = 0)
+                        if (firstRes.isSuccessful && firstRes.body() != null) {
+                            val body = firstRes.body()!!
+                            var list = body.items
+                            playlists = list
+                            isLoading = false
+
+                            val total = body.total
+                            var offset = 50
+                            while (list.size < total) {
+                                val nextRes = SpotifyClient.apiService.getUserPlaylists(limit = 50, offset = offset)
+                                if (nextRes.isSuccessful && nextRes.body() != null) {
+                                    val nextBatch = nextRes.body()!!.items
+                                    if (nextBatch.isEmpty()) break
+                                    list = (list + nextBatch).distinctBy { it.id }
+                                    playlists = list
+                                    offset += 50
+                                } else {
+                                    break
+                                }
+                            }
                         }
                     }
                     LibraryTab.ALBUMS -> {
-                        val res = SpotifyClient.apiService.getSavedAlbums(limit = 50)
-                        if (res.isSuccessful && res.body() != null) {
-                            albums = res.body()!!.items
+                        val firstRes = SpotifyClient.apiService.getSavedAlbums(limit = 50, offset = 0)
+                        if (firstRes.isSuccessful && firstRes.body() != null) {
+                            val body = firstRes.body()!!
+                            var list = body.items
+                            albums = list
+                            isLoading = false
+
+                            val total = body.total
+                            var offset = 50
+                            while (list.size < total) {
+                                val nextRes = SpotifyClient.apiService.getSavedAlbums(limit = 50, offset = offset)
+                                if (nextRes.isSuccessful && nextRes.body() != null) {
+                                    val nextBatch = nextRes.body()!!.items
+                                    if (nextBatch.isEmpty()) break
+                                    list = (list + nextBatch).distinctBy { it.album.id }
+                                    albums = list
+                                    offset += 50
+                                } else {
+                                    break
+                                }
+                            }
                         }
                     }
                     LibraryTab.ARTISTS -> {
@@ -84,9 +120,28 @@ fun LibraryScreen(
                         }
                     }
                     LibraryTab.LIKED -> {
-                        val res = SpotifyClient.apiService.getSavedTracks(limit = 50)
-                        if (res.isSuccessful && res.body() != null) {
-                            likedTracks = res.body()!!.items.map { it.track }
+                        val firstRes = SpotifyClient.apiService.getSavedTracks(limit = 50, offset = 0)
+                        if (firstRes.isSuccessful && firstRes.body() != null) {
+                            val body = firstRes.body()!!
+                            var list = body.items.map { it.track }
+                            likedTracks = list
+                            isLoading = false
+
+                            // Cargar todas las páginas siguientes para que aparezcan absolutamente todos los me gusta
+                            val total = body.total
+                            var offset = 50
+                            while (list.size < total) {
+                                val nextRes = SpotifyClient.apiService.getSavedTracks(limit = 50, offset = offset)
+                                if (nextRes.isSuccessful && nextRes.body() != null) {
+                                    val nextBatch = nextRes.body()!!.items.map { it.track }
+                                    if (nextBatch.isEmpty()) break
+                                    list = (list + nextBatch).distinctBy { it.id }
+                                    likedTracks = list
+                                    offset += 50
+                                } else {
+                                    break
+                                }
+                            }
                         }
                     }
                     LibraryTab.DOWNLOADS -> {

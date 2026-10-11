@@ -226,7 +226,7 @@ fun DesktopTabletShell(
                         HomeScreen(
                             userProfile = userProfile,
                             onProfileClick = { onNavigate(NavigationScreen.SETTINGS) },
-                            onLikedSongsClick = { onNavigate(NavigationScreen.LIBRARY) },
+                            onLikedSongsClick = { onNavigate(NavigationScreen.LIKED_SONGS) },
                             onPlaylistClick = { onPlaylistSelected(it) },
                             onTrackClick = { track -> playbackManager.playTrack(track) }
                         )
@@ -258,6 +258,16 @@ fun DesktopTabletShell(
                         } ?: run {
                             onNavigate(NavigationScreen.HOME)
                         }
+                    }
+                    NavigationScreen.LIKED_SONGS -> {
+                        LikedSongsScreen(
+                            userProfile = userProfile,
+                            onBackClick = { onNavigate(NavigationScreen.HOME) },
+                            onTrackClick = { track, list -> playbackManager.playTrack(track, list) },
+                            onPlayAllClick = { list ->
+                                if (list.isNotEmpty()) playbackManager.playTrack(list.first(), list)
+                            }
+                        )
                     }
                     NavigationScreen.SETTINGS -> {
                         SettingsScreen(
