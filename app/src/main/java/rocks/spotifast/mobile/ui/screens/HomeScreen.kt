@@ -56,50 +56,37 @@ fun HomeScreen(
     var recommendedTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // Ítems "Hecho para ti" idénticos a Captura 1 del cliente de PC
-    val madeForYouList = remember {
-        listOf(
-            MadeForYouItem(
-                id = "dw",
-                title = "Discover Weekly",
-                subtitle = "Your shortcut to hidden gems, deep cuts, and...",
-                coverUrl = "https://misc.scdn.co/personalized/default-cheetah/discover-weekly_640.jpg",
-                uri = "spotify:playlist:37i9dQZEVXcQ9JaJVbyA7e"
-            ),
-            MadeForYouItem(
-                id = "rr",
-                title = "Release Radar",
-                subtitle = "Catch all the latest music from artists you...",
-                coverUrl = "https://misc.scdn.co/personalized/default-cheetah/release-radar_640.jpg",
-                uri = "spotify:playlist:37i9dQZEVXbo6gZ4u35r3M"
-            ),
-            MadeForYouItem(
-                id = "dm2",
-                title = "Daily Mix 2",
-                subtitle = "Bruno Mars, AURORA, Ariana Grande and more",
-                coverUrl = "https://dailymix-images.scdn.co/v2/img/ab6761610000e5ebc36dd9eb55fb0db4911f25dd/2/en/default",
-                uri = "spotify:playlist:37i9dQZF1E37xR7fB1Tz2M"
-            ),
-            MadeForYouItem(
-                id = "dm3",
-                title = "Daily Mix 3",
-                subtitle = "MISAMO, DAY6, NewJeans and more",
-                coverUrl = "https://dailymix-images.scdn.co/v2/img/ab6761610000e5eb2e1b1d830b5636025bc01201/3/en/default",
-                uri = "spotify:playlist:37i9dQZF1E39Rj6Qh4n8B3"
-            ),
-            MadeForYouItem(
-                id = "dm1",
-                title = "Daily Mix 1",
-                subtitle = "BTS, TWICE, Red Velvet and more",
-                coverUrl = "https://dailymix-images.scdn.co/v2/img/ab6761610000e5eb5704a64f34fe29ff73ab56bb/1/en/default",
-                uri = "spotify:playlist:37i9dQZF1E36gC9fB4h1A1"
-            ),
-            MadeForYouItem(
-                id = "dm4",
-                title = "Daily Mix 4",
-                subtitle = "Los Angeles Negros, Camilo Sesto, Leo Dan",
-                coverUrl = "https://dailymix-images.scdn.co/v2/img/ab6761610000e5eb00c6d9bf763db444a835b8dd/4/en/default",
-                uri = "spotify:playlist:37i9dQZF1E38d2LpB6k4M4"
+    var madeForYouList by remember {
+        mutableStateOf(
+            listOf(
+                MadeForYouItem(
+                    id = "dw",
+                    title = "Discover Weekly",
+                    subtitle = "Tus descubrimientos semanales y joyas ocultas",
+                    coverUrl = "https://misc.scdn.co/personalized/default-cheetah/discover-weekly_640.jpg",
+                    uri = "spotify:playlist:37i9dQZEVXcQ9JaJVbyA7e"
+                ),
+                MadeForYouItem(
+                    id = "rr",
+                    title = "Release Radar",
+                    subtitle = "Últimos lanzamientos de tus artistas seguidos",
+                    coverUrl = "https://misc.scdn.co/personalized/default-cheetah/release-radar_640.jpg",
+                    uri = "spotify:playlist:37i9dQZEVXbo6gZ4u35r3M"
+                ),
+                MadeForYouItem(
+                    id = "dm1",
+                    title = "Daily Mix 1",
+                    subtitle = "Mix personalizado para ti",
+                    coverUrl = "https://dailymix-images.scdn.co/v2/img/ab6761610000e5eb5704a64f34fe29ff73ab56bb/1/en/default",
+                    uri = "spotify:playlist:37i9dQZF1E36gC9fB4h1A1"
+                ),
+                MadeForYouItem(
+                    id = "dm2",
+                    title = "Daily Mix 2",
+                    subtitle = "Mix con tus canciones y artistas frecuentes",
+                    coverUrl = "https://dailymix-images.scdn.co/v2/img/ab6761610000e5ebc36dd9eb55fb0db4911f25dd/2/en/default",
+                    uri = "spotify:playlist:37i9dQZF1E37xR7fB1Tz2M"
+                )
             )
         )
     }
@@ -110,7 +97,7 @@ fun HomeScreen(
             coroutineScope {
                 // 1. Playlists del usuario para accesos directos
                 val plDeferred = async {
-                    try { SpotifyClient.apiService.getUserPlaylists(limit = 20).body()?.items ?: emptyList() } catch (_: Exception) { emptyList() }
+                    try { SpotifyClient.apiService.getUserPlaylists(limit = 30).body()?.items ?: emptyList() } catch (_: Exception) { emptyList() }
                 }
 
                 // 2. Reproducido recientemente (Screenshot 1)
@@ -138,11 +125,56 @@ fun HomeScreen(
                     } catch (_: Exception) { emptyList() }
                 }
 
-                userPlaylists = plDeferred.await()
+                // 6. Búsqueda de mixes dinámicos
+                val searchMixesDeferred = async {
+                    try {
+                        SpotifyClient.apiService.search(query = "Daily Mix", type = "playlist", limit = 10).body()?.playlists?.items ?: emptyList()
+                    } catch (_: Exception) { emptyList() }
+                }
+
+                val allPlaylists = plDeferred.await()
+                userPlaylists = allPlaylists
                 recentlyPlayedTracks = recentsDeferred.await()
                 topArtists = artistsDeferred.await()
                 topTracks = topTracksDeferred.await()
                 recommendedTracks = recsDeferred.await()
+
+                // Filtrar o componer mixes dinámicos del usuario
+                val dynamicMixes = mutableListOf<MadeForYouItem>()
+                val userMixes = allPlaylists.filter { pl ->
+                    val n = pl.name.lowercase()
+                    n.contains("mix") || n.contains("discover") || n.contains("radar") || n.contains("descubrimiento") || pl.owner?.id == "spotify"
+                }
+                userMixes.forEach { pl ->
+                    dynamicMixes.add(
+                        MadeForYouItem(
+                            id = pl.id,
+                            title = pl.name,
+                            subtitle = pl.description ?: "Por ${pl.owner?.displayName ?: "Spotify"}",
+                            coverUrl = pl.getCoverUrl(300) ?: "",
+                            uri = pl.uri
+                        )
+                    )
+                }
+
+                val searchedMixes = searchMixesDeferred.await()
+                searchedMixes.forEach { pl ->
+                    if (dynamicMixes.none { it.id == pl.id }) {
+                        dynamicMixes.add(
+                            MadeForYouItem(
+                                id = pl.id,
+                                title = pl.name,
+                                subtitle = pl.description ?: "Por ${pl.owner?.displayName ?: "Spotify"}",
+                                coverUrl = pl.getCoverUrl(300) ?: "",
+                                uri = pl.uri
+                            )
+                        )
+                    }
+                }
+
+                if (dynamicMixes.isNotEmpty()) {
+                    madeForYouList = dynamicMixes.take(10)
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
