@@ -1,5 +1,6 @@
 package rocks.spotifast.mobile.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,20 +9,24 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowCircleDown
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
-import rocks.spotifast.mobile.SpotifastApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
+import rocks.spotifast.mobile.SpotifastApp
 import rocks.spotifast.mobile.data.api.SpotifyClient
 import rocks.spotifast.mobile.data.api.models.Playlist
 import rocks.spotifast.mobile.data.api.models.Track
@@ -36,15 +41,23 @@ fun PlaylistDetailScreen(
     onPlayAllClick: (Playlist, List<Track>) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val cacheManager = SpotifastApp.instance.cacheManager
+    val downloadedIds by cacheManager.downloadedTrackIds.collectAsState()
+
     var tracks by remember { mutableStateOf<List<Track>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgressText by remember { mutableStateOf<String?>(null) }
+
+    val isPlaylistFullyDownloaded = tracks.isNotEmpty() && tracks.all { downloadedIds.contains(it.id) }
 
     LaunchedEffect(playlist.id) {
         isLoading = true
         errorMessage = null
         try {
-            // 1. Intentar obtener pistas directamente de Spotify
             var fetchedTracks: List<Track> = emptyList()
 
             val response = SpotifyClient.apiService.getPlaylistItems(playlistId = playlist.id, limit = 50)
@@ -57,8 +70,6 @@ fun PlaylistDetailScreen(
                 }
             }
 
-            // 2. Si es una lista algorítmica / Mix / Radio de Spotify (que devuelve 403 o vacía en API de terceros)
-            // cargar automáticamente canciones de los artistas mencionados o recomendaciones para que NUNCA esté vacía
             if (fetchedTracks.isEmpty()) {
                 val searchKeywords = when {
                     !playlist.description.isNullOrEmpty() -> playlist.description.replace("and more", "").trim()
@@ -70,7 +81,6 @@ fun PlaylistDetailScreen(
                 if (searchRes.isSuccessful && searchRes.body()?.tracks?.items?.isNotEmpty() == true) {
                     fetchedTracks = searchRes.body()!!.tracks!!.items
                 } else {
-                    // Fallback a top tracks del usuario
                     val topRes = SpotifyClient.apiService.getTopTracks(limit = 20)
                     if (topRes.isSuccessful && topRes.body()?.items?.isNotEmpty() == true) {
                         fetchedTracks = topRes.body()!!.items
@@ -167,49 +177,117 @@ fun PlaylistDetailScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Botón de reproducción y botón aleatorio
+            // Barra de acciones: Botón de Descargar Spotifast, Botón Aleatorio y Botón Play
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    onClick = {
-                        if (tracks.isNotEmpty()) {
-                            SpotifastApp.instance.playbackManager.setShuffle(true)
-                            val shuffled = tracks.shuffled()
-                            onPlayAllClick(playlist, shuffled)
-                        }
-                    },
-                    shape = CircleShape,
-                    color = LocalSpotifastColors.current.card,
-                    modifier = Modifier.size(46.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Shuffle,
-                            contentDescription = "Reproducción aleatoria",
-                            tint = LocalSpotifastColors.current.accent,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
+                if (downloadProgressText != null) {
+                    Text(
+                        text = "Descargando: $downloadProgressText",
+                        color = LocalSpotifastColors.current.accent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                } else {
+                    Spacer(modifier = Modifier.width(1.dp))
                 }
 
-                Spacer(modifier = Modifier.width(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Botón de descargar canciones de Spotifast para modo offline
+                    Surface(
+                        onClick = {
+                            if (isDownloading) return@Surface
+                            if (isPlaylistFullyDownloaded) {
+                                cacheManager.removeDownloadedPlaylist(tracks)
+                                Toast.makeText(context, "Descargas eliminadas de Spotifast", Toast.LENGTH_SHORT).show()
+                            } else {
+                                if (tracks.isNotEmpty()) {
+                                    isDownloading = true
+                                    Toast.makeText(context, "Descargando ${tracks.size} canciones en Spotifast...", Toast.LENGTH_SHORT).show()
+                                    coroutineScope.launch {
+                                        cacheManager.downloadPlaylist(tracks) { completed, total ->
+                                            downloadProgressText = "$completed/$total"
+                                        }
+                                        isDownloading = false
+                                        downloadProgressText = null
+                                        Toast.makeText(context, "¡Playlist descargada para modo offline!", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        },
+                        shape = CircleShape,
+                        color = if (isPlaylistFullyDownloaded) LocalSpotifastColors.current.accent.copy(alpha = 0.2f) else LocalSpotifastColors.current.card,
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (isDownloading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    color = LocalSpotifastColors.current.accent,
+                                    strokeWidth = 2.dp
+                                )
+                            } else if (isPlaylistFullyDownloaded) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Descargada en Spotifast",
+                                    tint = LocalSpotifastColors.current.accent,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowCircleDown,
+                                    contentDescription = "Descargar canciones de la playlist",
+                                    tint = LocalSpotifastColors.current.textSecondary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                    }
 
-                Surface(
-                    onClick = { onPlayAllClick(playlist, tracks) },
-                    shape = CircleShape,
-                    color = LocalSpotifastColors.current.accent,
-                    modifier = Modifier.size(54.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Reproducir todo",
-                            tint = LocalSpotifastColors.current.background,
-                            modifier = Modifier.size(34.dp)
-                        )
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    // Botón de reproducción aleatoria
+                    Surface(
+                        onClick = {
+                            if (tracks.isNotEmpty()) {
+                                SpotifastApp.instance.playbackManager.setShuffle(true)
+                                val shuffled = tracks.shuffled()
+                                onPlayAllClick(playlist, shuffled)
+                            }
+                        },
+                        shape = CircleShape,
+                        color = LocalSpotifastColors.current.card,
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Shuffle,
+                                contentDescription = "Reproducción aleatoria",
+                                tint = LocalSpotifastColors.current.accent,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    // Botón de reproducción grande
+                    Surface(
+                        onClick = { onPlayAllClick(playlist, tracks) },
+                        shape = CircleShape,
+                        color = LocalSpotifastColors.current.accent,
+                        modifier = Modifier.size(54.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Reproducir todo",
+                                tint = LocalSpotifastColors.current.background,
+                                modifier = Modifier.size(34.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -258,7 +336,22 @@ fun PlaylistDetailScreen(
             itemsIndexed(tracks) { _, track ->
                 TrackListItem(
                     track = track,
-                    onClick = { onTrackClick(track, tracks) }
+                    isDownloaded = downloadedIds.contains(track.id),
+                    onClick = { onTrackClick(track, tracks) },
+                    onToggleDownload = {
+                        coroutineScope.launch {
+                            if (downloadedIds.contains(track.id)) {
+                                cacheManager.removeDownloadedTrack(track.id)
+                                Toast.makeText(context, "Canción eliminada del almacenamiento", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Descargando ${track.name}...", Toast.LENGTH_SHORT).show()
+                                val ok = cacheManager.downloadTrack(track)
+                                if (ok) {
+                                    Toast.makeText(context, "¡${track.name} descargada!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
                 )
             }
         }

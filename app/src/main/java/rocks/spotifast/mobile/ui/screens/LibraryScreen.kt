@@ -160,7 +160,8 @@ fun LibraryScreen(
         loadData()
     }
 
-    val downloadedAllTracks = remember(localTracks) {
+    val downloadedTrackIds by cacheManager.downloadedTrackIds.collectAsState()
+    val downloadedAllTracks = remember(localTracks, downloadedTrackIds) {
         val cached = cacheManager.getDownloadedTracks()
         (localTracks + cached).distinctBy { it.id }
     }

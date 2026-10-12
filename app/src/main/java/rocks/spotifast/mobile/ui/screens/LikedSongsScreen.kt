@@ -38,6 +38,9 @@ fun LikedSongsScreen(
 ) {
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val cacheManager = SpotifastApp.instance.cacheManager
+    val downloadedIds by cacheManager.downloadedTrackIds.collectAsState()
 
     var tracks by remember { mutableStateOf<List<Track>>(emptyList()) }
     var totalCount by remember { mutableIntStateOf(0) }
@@ -46,6 +49,8 @@ fun LikedSongsScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var filterQuery by remember { mutableStateOf("") }
     var isSearchVisible by remember { mutableStateOf(false) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgressText by remember { mutableStateOf<String?>(null) }
 
     suspend fun loadPage(offset: Int) {
         try {
@@ -228,6 +233,59 @@ fun LikedSongsScreen(
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val isLikedFullyDownloaded = tracks.isNotEmpty() && tracks.all { downloadedIds.contains(it.id) }
+                    Surface(
+                        onClick = {
+                            if (isDownloading) return@Surface
+                            if (isLikedFullyDownloaded) {
+                                cacheManager.removeDownloadedPlaylist(tracks)
+                                android.widget.Toast.makeText(context, "Descargas eliminadas de Spotifast", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                if (tracks.isNotEmpty()) {
+                                    isDownloading = true
+                                    android.widget.Toast.makeText(context, "Descargando canciones en Spotifast...", android.widget.Toast.LENGTH_SHORT).show()
+                                    scope.launch {
+                                        cacheManager.downloadPlaylist(tracks) { completed, total ->
+                                            downloadProgressText = "$completed/$total"
+                                        }
+                                        isDownloading = false
+                                        downloadProgressText = null
+                                        android.widget.Toast.makeText(context, "¡Canciones descargadas para modo offline!", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        },
+                        shape = CircleShape,
+                        color = if (isLikedFullyDownloaded) LocalSpotifastColors.current.accent.copy(alpha = 0.2f) else LocalSpotifastColors.current.card,
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (isDownloading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    color = LocalSpotifastColors.current.accent,
+                                    strokeWidth = 2.dp
+                                )
+                            } else if (isLikedFullyDownloaded) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Descargadas en Spotifast",
+                                    tint = LocalSpotifastColors.current.accent,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowCircleDown,
+                                    contentDescription = "Descargar canciones",
+                                    tint = LocalSpotifastColors.current.textSecondary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
                     Surface(
                         onClick = {
                             if (tracks.isNotEmpty()) {
@@ -315,7 +373,22 @@ fun LikedSongsScreen(
             itemsIndexed(filteredTracks) { _, track ->
                 TrackListItem(
                     track = track,
-                    onClick = { onTrackClick(track, filteredTracks) }
+                    isDownloaded = downloadedIds.contains(track.id),
+                    onClick = { onTrackClick(track, filteredTracks) },
+                    onToggleDownload = {
+                        scope.launch {
+                            if (downloadedIds.contains(track.id)) {
+                                cacheManager.removeDownloadedTrack(track.id)
+                                android.widget.Toast.makeText(context, "Canción eliminada del almacenamiento", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                android.widget.Toast.makeText(context, "Descargando ${track.name}...", android.widget.Toast.LENGTH_SHORT).show()
+                                val ok = cacheManager.downloadTrack(track)
+                                if (ok) {
+                                    android.widget.Toast.makeText(context, "¡${track.name} descargada!", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
                 )
             }
 

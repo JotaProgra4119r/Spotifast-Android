@@ -73,7 +73,7 @@ class PlaybackManager(private val context: Context) {
     private var pollingJob: Job? = null
     private var progressJob: Job? = null
 
-    private val isPlayingOnLocalPhone: Boolean
+    val isPlayingOnLocalPhone: Boolean
         get() = _connectedDevice.value == null || _connectedDevice.value?.id == LOCAL_DEVICE_ID
 
     init {
@@ -135,7 +135,7 @@ class PlaybackManager(private val context: Context) {
         pollingJob?.cancel()
         pollingJob = scope.launch(Dispatchers.IO) {
             while (isActive) {
-                if (SpotifastApp.instance.authManager.isLoggedIn.value && !isPlayingOnLocalPhone) {
+                if (SpotifastApp.instance.authManager.isLoggedIn.value) {
                     syncSpotifyPlayerState()
                 }
                 delay(2500)
@@ -148,27 +148,35 @@ class PlaybackManager(private val context: Context) {
             val response = SpotifyClient.apiService.getPlaybackState()
             if (response.isSuccessful && response.body() != null) {
                 val state = response.body()!!
+                val dev = state.device
 
-                state.device?.let { dev ->
-                    _connectedDevice.value = dev
-                    _connectedDeviceName.value = dev.name
+                // Si hay un dispositivo remoto activo reportado por Spotify Connect (Alexa, PC, altavoz, etc.)
+                if (dev != null && dev.isActive && dev.id != LOCAL_DEVICE_ID) {
+                    val isLocalExoPlaying = controller?.isPlaying == true
+
+                    // Si el reproductor local no está sonando activamente, reflejar el dispositivo remoto
+                    if (!isLocalExoPlaying) {
+                        _connectedDevice.value = dev
+                        _connectedDeviceName.value = dev.name
+                        _isPlaying.value = state.isPlaying
+                        _progressMs.value = state.progressMs ?: 0L
+
+                        state.item?.let { track ->
+                            _currentTrack.value = track
+                            _durationMs.value = track.durationMs
+                        }
+
+                        _isShuffle.value = state.shuffleState ?: false
+                        _repeatMode.value = state.repeatState ?: "off"
+                    }
                 }
-
-                _isPlaying.value = state.isPlaying
-                _progressMs.value = state.progressMs ?: 0L
-
-                state.item?.let { track ->
-                    _currentTrack.value = track
-                    _durationMs.value = track.durationMs
-                }
-
-                _isShuffle.value = state.shuffleState ?: false
-                _repeatMode.value = state.repeatState ?: "off"
             }
 
-            // Refrescar lista de dispositivos Connect
+            // Refrescar lista de dispositivos Connect disponibles
             refreshDevicesInternal()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.d("PlaybackManager", "syncSpotifyPlayerState: ${e.message}")
+        }
     }
 
     private suspend fun refreshDevicesInternal() {
@@ -185,7 +193,8 @@ class PlaybackManager(private val context: Context) {
             _availableDevices.value = allDevs
 
             val activeRemote = remoteDevs.firstOrNull { it.isActive }
-            if (activeRemote != null && !isPlayingOnLocalPhone) {
+            val isLocalExoPlaying = controller?.isPlaying == true
+            if (activeRemote != null && !isLocalExoPlaying && activeRemote.id != LOCAL_DEVICE_ID) {
                 _connectedDevice.value = activeRemote
                 _connectedDeviceName.value = activeRemote.name
             }
@@ -206,13 +215,23 @@ class PlaybackManager(private val context: Context) {
         if (isLocalAudio || isPlayingOnLocalPhone) {
             // Reproducción 100% nativa en ExoPlayer dentro de Spotifast
             _connectedDevice.value = LOCAL_PHONE_DEVICE
-            _connectedDeviceName.value = "Este teléfono (Spotifast Player)"
+            _connectedDeviceName.value = LOCAL_PHONE_DEVICE.name
+
+            // Pausar cualquier dispositivo Spotify Connect remoto activo (como Alexa)
+            // para que no sigan reproduciendo cosas distintas a la vez
+            scope.launch(Dispatchers.IO) {
+                try {
+                    SpotifyClient.apiService.pause()
+                } catch (_: Exception) {}
+            }
 
             scope.launch(Dispatchers.Main) {
                 playInLocalExoPlayer(track)
             }
         } else {
-            // Reproducción en dispositivo externo de Spotify Connect (PC, Altavoz, TV)
+            // Reproducción en dispositivo externo de Spotify Connect (Alexa, PC, Altavoz, TV)
+            controller?.pause()
+
             scope.launch(Dispatchers.IO) {
                 val activeDeviceId = _connectedDevice.value?.id
                 try {
@@ -222,7 +241,7 @@ class PlaybackManager(private val context: Context) {
                         Log.w("PlaybackManager", "Spotify Connect remoto falló (${res.code()}), cambiando a reproductor local...")
                         withContext(Dispatchers.Main) {
                             _connectedDevice.value = LOCAL_PHONE_DEVICE
-                            _connectedDeviceName.value = "Este teléfono (Spotifast Player)"
+                            _connectedDeviceName.value = LOCAL_PHONE_DEVICE.name
                             playInLocalExoPlayer(track)
                         }
                     } else {
@@ -232,7 +251,7 @@ class PlaybackManager(private val context: Context) {
                     Log.e("PlaybackManager", "Fallo al enviar a Connect remoto, reproduciendo en teléfono", e)
                     withContext(Dispatchers.Main) {
                         _connectedDevice.value = LOCAL_PHONE_DEVICE
-                        _connectedDeviceName.value = "Este teléfono (Spotifast Player)"
+                        _connectedDeviceName.value = LOCAL_PHONE_DEVICE.name
                         playInLocalExoPlayer(track)
                     }
                 }
@@ -248,9 +267,13 @@ class PlaybackManager(private val context: Context) {
         }
 
         try {
-            // Resolver stream de audio directamente
             val isLocalUri = track.isLocal || track.uri.startsWith("content://") || track.uri.startsWith("file://")
-            val mediaUriString = if (isLocalUri) {
+            val offlineUri = SpotifastApp.instance.cacheManager.getTrackAudioUri(track.id)
+
+            val mediaUriString = if (!offlineUri.isNullOrEmpty()) {
+                Log.i("PlaybackManager", "Reproduciendo desde caché offline de Spotifast: ${track.name}")
+                offlineUri
+            } else if (isLocalUri) {
                 track.uri
             } else {
                 AudioStreamResolver.resolveStreamUrl(
@@ -289,6 +312,8 @@ class PlaybackManager(private val context: Context) {
 
     fun playPlaylistContext(contextUri: String, startingUri: String? = null, tracksFallback: List<Track> = emptyList()) {
         if (!isPlayingOnLocalPhone) {
+            controller?.pause()
+
             scope.launch(Dispatchers.IO) {
                 try {
                     val body = mutableMapOf<String, Any>("context_uri" to contextUri)
@@ -302,7 +327,7 @@ class PlaybackManager(private val context: Context) {
                     if (!res.isSuccessful && tracksFallback.isNotEmpty()) {
                         withContext(Dispatchers.Main) {
                             _connectedDevice.value = LOCAL_PHONE_DEVICE
-                            _connectedDeviceName.value = "Este teléfono (Spotifast Player)"
+                            _connectedDeviceName.value = LOCAL_PHONE_DEVICE.name
                             playTrack(tracksFallback.first(), tracksFallback)
                         }
                     } else {
@@ -312,14 +337,17 @@ class PlaybackManager(private val context: Context) {
                     if (tracksFallback.isNotEmpty()) {
                         withContext(Dispatchers.Main) {
                             _connectedDevice.value = LOCAL_PHONE_DEVICE
-                            _connectedDeviceName.value = "Este teléfono (Spotifast Player)"
+                            _connectedDeviceName.value = LOCAL_PHONE_DEVICE.name
                             playTrack(tracksFallback.first(), tracksFallback)
                         }
                     }
                 }
             }
         } else {
-            // En modo local: reproducir directamente en la app
+            // En modo local: pausar remoto si hubiera y reproducir directamente en la app
+            scope.launch(Dispatchers.IO) {
+                try { SpotifyClient.apiService.pause() } catch (_: Exception) {}
+            }
             if (tracksFallback.isNotEmpty()) {
                 val start = if (startingUri != null) {
                     tracksFallback.firstOrNull { it.uri == startingUri } ?: tracksFallback.first()
@@ -426,6 +454,14 @@ class PlaybackManager(private val context: Context) {
         if (device.id == LOCAL_DEVICE_ID) {
             _connectedDevice.value = LOCAL_PHONE_DEVICE
             _connectedDeviceName.value = LOCAL_PHONE_DEVICE.name
+
+            // Pausar cualquier dispositivo Spotify Connect remoto activo (como Alexa)
+            scope.launch(Dispatchers.IO) {
+                try {
+                    SpotifyClient.apiService.pause()
+                } catch (_: Exception) {}
+            }
+
             _currentTrack.value?.let { track ->
                 scope.launch(Dispatchers.Main) {
                     playInLocalExoPlayer(track)
@@ -447,8 +483,14 @@ class PlaybackManager(private val context: Context) {
                     "device_ids" to listOf(devId),
                     "play" to _isPlaying.value
                 )
-                SpotifyClient.apiService.transferPlayback(body)
-                delay(500)
+                val res = SpotifyClient.apiService.transferPlayback(body)
+                if (!res.isSuccessful) {
+                    val curUri = _currentTrack.value?.uri
+                    if (!curUri.isNullOrEmpty()) {
+                        SpotifyClient.apiService.play(deviceId = devId, body = mapOf("uris" to listOf(curUri)))
+                    }
+                }
+                delay(600)
                 syncSpotifyPlayerState()
             } catch (e: Exception) {
                 Log.e("PlaybackManager", "Error al transferir reproducción a dispositivo", e)
